@@ -1,0 +1,10 @@
+[package]
+name = "cash"
+version = "0.1.0"
+edition = "2024"
+description = "TUI to Capture Shell outputs (and explore them)"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/jtjlehi/CaSh.git"
+
+[dependencies]
