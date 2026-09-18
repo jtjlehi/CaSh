@@ -8,3 +8,5 @@ readme = "README.md"
 repository = "https://github.com/jtjlehi/CaSh.git"
 
 [dependencies]
+crossterm = "0.29.0"
+ratatui = "0.30.2"
