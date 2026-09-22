@@ -4,10 +4,10 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::Stylize,
     symbols::border,
-    text::{Line, Text},
+    text::Line,
     widgets::{Block, Paragraph, Widget},
 };
 
@@ -15,7 +15,6 @@ mod input_prompt;
 
 #[derive(Debug, Default)]
 struct App {
-    counter: u8,
     exit: bool,
 }
 
@@ -50,30 +49,37 @@ impl App {
             KeyCode::Char('q') => {
                 self.exit = true;
             }
-            KeyCode::Left => {
-                self.counter -= 1;
-            }
-            KeyCode::Right => {
-                self.counter += 1;
+            KeyCode::Char('i') => {
+                todo!("enter insert mode")
             }
             _ => {}
         }
     }
 }
 
-fn app_layout() -> Layout {
-    Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
+struct AppLayout {
+    body_layout: Rect,
+    prompt_layout: Rect,
+}
+
+impl AppLayout {
+    fn new(area: Rect) -> Self {
+        let [body_layout, prompt_layout] = area.layout(&Layout::vertical([
             // main body should be at least 30 tall
             Constraint::Min(30),
             Constraint::Length(10),
-        ])
+        ]));
+        AppLayout {
+            body_layout,
+            prompt_layout,
+        }
+    }
 }
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" Counter App Tutorial ".bold());
+        let layout = AppLayout::new(area);
+        let title = Line::from(" Main Content ".bold());
         let instructions = Line::from(vec![
             " Decrement ".into(),
             "<Left>".blue().bold(),
@@ -87,15 +93,10 @@ impl Widget for &App {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
-        ])]);
-
-        Paragraph::new(counter_text)
+        Paragraph::new("empty text")
             .centered()
             .block(block)
-            .render(area, buf);
+            .render(layout.body_layout, buf);
     }
 }
 
@@ -117,16 +118,14 @@ mod tests {
         app.render(buf.area, &mut buf);
 
         let mut expected = Buffer::with_lines(vec![
-            "┏━━━━━━━━━━━━━ Counter App Tutorial ━━━━━━━━━━━━━┓",
-            "┃                    Value: 0                    ┃",
+            "┏━━━━━━━━━━━━━━━━━ Main Content ━━━━━━━━━━━━━━━━━┓",
+            "┃                   empty text                   ┃",
             "┃                                                ┃",
             "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
         ]);
         let title_style = Style::new().bold();
-        let counter_style = Style::new().yellow();
         let key_style = Style::new().blue().bold();
-        expected.set_style(Rect::new(14, 0, 22, 1), title_style);
-        expected.set_style(Rect::new(28, 1, 1, 1), counter_style);
+        expected.set_style(Rect::new(18, 0, 14, 1), title_style);
         expected.set_style(Rect::new(13, 3, 6, 1), key_style);
         expected.set_style(Rect::new(30, 3, 7, 1), key_style);
         expected.set_style(Rect::new(43, 3, 4, 1), key_style);
@@ -137,24 +136,17 @@ mod tests {
     #[test]
     fn handle_key_event() {
         let mut app = App::default();
-        app.handle_key_event(KeyCode::Right.into());
-        assert_eq!(app.counter, 1);
-
-        app.handle_key_event(KeyCode::Left.into());
-        assert_eq!(app.counter, 0);
-
-        let mut app = App::default();
         app.handle_key_event(KeyCode::Char('q').into());
         assert!(app.exit);
     }
 
     #[test]
     fn builds_app_layout() {
-        let layout = app_layout().split(Rect::new(0, 0, 10, 100));
-
-        assert_eq!(
-            layout[..],
-            [Rect::new(0, 0, 10, 90), Rect::new(0, 90, 10, 10)]
-        )
+        let AppLayout {
+            body_layout,
+            prompt_layout,
+        } = AppLayout::new(Rect::new(0, 0, 10, 100));
+        assert_eq!(body_layout, Rect::new(0, 0, 10, 90));
+        assert_eq!(prompt_layout, Rect::new(0, 90, 10, 10));
     }
 }
