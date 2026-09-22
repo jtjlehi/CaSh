@@ -4,7 +4,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
     symbols::border,
     text::{Line, Text},
@@ -57,6 +57,16 @@ impl App {
             _ => {}
         }
     }
+}
+
+fn app_layout() -> Layout {
+    Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            // main body should be at least 30 tall
+            Constraint::Min(30),
+            Constraint::Length(10),
+        ])
 }
 
 impl Widget for &App {
@@ -134,5 +144,15 @@ mod tests {
         let mut app = App::default();
         app.handle_key_event(KeyCode::Char('q').into());
         assert!(app.exit);
+    }
+
+    #[test]
+    fn builds_app_layout() {
+        let layout = app_layout().split(Rect::new(0, 0, 10, 100));
+
+        assert_eq!(
+            layout[..],
+            [Rect::new(0, 0, 10, 90), Rect::new(0, 90, 10, 10)]
+        )
     }
 }
