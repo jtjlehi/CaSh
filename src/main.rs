@@ -1,6 +1,7 @@
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use input_prompt::InputPrompt;
 use ratatui::{
     DefaultTerminal, Frame,
     buffer::Buffer,
@@ -8,7 +9,7 @@ use ratatui::{
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget, WidgetRef},
 };
 
 mod input_prompt;
@@ -16,6 +17,7 @@ mod input_prompt;
 #[derive(Debug, Default)]
 struct App {
     exit: bool,
+    input_prompt: InputPrompt,
 }
 
 impl App {
@@ -79,6 +81,8 @@ impl AppLayout {
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let layout = AppLayout::new(area);
+
+        // Draw the main content (for now it isn't a seperate thing)
         let title = Line::from(" Main Content ".bold());
         let instructions = Line::from(vec![
             " Decrement ".into(),
@@ -92,11 +96,13 @@ impl Widget for &App {
             .title(title.centered())
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
-
         Paragraph::new("empty text")
             .centered()
             .block(block)
             .render(layout.body_layout, buf);
+
+        // draw the input prompt
+        self.input_prompt.render_ref(layout.prompt_layout, buf);
     }
 }
 
