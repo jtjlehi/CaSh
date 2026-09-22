@@ -11,6 +11,8 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget},
 };
 
+mod input_prompt;
+
 #[derive(Debug, Default)]
 struct App {
     counter: u8,
