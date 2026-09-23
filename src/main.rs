@@ -1,62 +1,31 @@
 use std::io;
 
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use input_prompt::InputPrompt;
 use ratatui::{
-    DefaultTerminal, Frame,
-    buffer::Buffer,
+    Frame,
     layout::{Constraint, Layout, Rect},
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, Paragraph, Widget, WidgetRef},
+    widgets::{Block, Paragraph},
 };
 
 mod input_prompt;
 
-#[derive(Debug, Default)]
-struct App {
-    exit: bool,
-    input_prompt: InputPrompt,
+#[derive(Default, Debug, PartialEq, PartialOrd)]
+/// The full state of the app
+pub struct State {
+    mode: Mode,
 }
 
-impl App {
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        while !self.exit {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
-        }
-        Ok(())
-    }
-
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
-    }
-
-    /// Updates the application's state based on events
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            // it's important to check that the event is a key press event as
-            // crossterm also emits key release and repeat events on Windows.
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
-            }
-            _ => {}
-        };
-        Ok(())
-    }
-
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => {
-                self.exit = true;
-            }
-            KeyCode::Char('i') => {
-                todo!("enter insert mode")
-            }
-            _ => {}
-        }
-    }
+#[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum Mode {
+    #[default]
+    Normal,
+    EditPrompt,
+    /// It is time to exit/close the app
+    Exit,
 }
 
 struct AppLayout {
@@ -78,9 +47,11 @@ impl AppLayout {
     }
 }
 
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let layout = AppLayout::new(area);
+/// The `view` logic
+impl State {
+    /// How to render the app based on the state
+    pub fn view(&self, frame: &mut Frame) {
+        let layout = AppLayout::new(frame.area());
 
         // Draw the main content (for now it isn't a seperate thing)
         let title = Line::from(" Main Content ".bold());
@@ -96,54 +67,99 @@ impl Widget for &App {
             .title(title.centered())
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
-        Paragraph::new("empty text")
-            .centered()
-            .block(block)
-            .render(layout.body_layout, buf);
+        frame.render_widget(
+            Paragraph::new("empty text").centered().block(block),
+            layout.body_layout,
+        );
+    }
+}
 
-        // draw the input prompt
-        self.input_prompt.render_ref(layout.prompt_layout, buf);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+pub enum Message {
+    /// Quit the application
+    Quit,
+}
+
+/// The `update` logic
+impl State {
+    /// Update the state based on the message passsed
+    pub fn update(&mut self, msg: Message) {
+        match msg {
+            Message::Quit => {
+                self.mode = Mode::Exit;
+            }
+        }
+    }
+}
+
+pub fn handle_event(_: &State) -> io::Result<Option<Message>> {
+    match event::read()? {
+        // it's important to check that the event is a key press event as
+        // crossterm also emits key release and repeat events on Windows.
+        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(handle_key(key)),
+        _ => Ok(None),
+    }
+}
+
+fn handle_key(key: event::KeyEvent) -> Option<Message> {
+    match key.code {
+        // KeyCode::Char('j') => Some(Message::Increment),
+        // KeyCode::Char('k') => Some(Message::Decrement),
+        KeyCode::Char('q') => Some(Message::Quit),
+        _ => None,
     }
 }
 
 fn main() -> io::Result<()> {
-    ratatui::run(|terminal| App::default().run(terminal))?;
+    ratatui::run(|terminal| -> io::Result<()> {
+        let mut state = State::default();
+        while state.mode != Mode::Exit {
+            terminal.draw(|f| state.view(f))?;
+            if let Some(msg) = handle_event(&state)? {
+                state.update(msg);
+            }
+        }
+        Ok(())
+    })?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Style;
 
-    #[test]
-    fn render() {
-        let app = App::default();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 4));
+    /// Tests that the given message updates the state correctly (from the default state)
+    fn test_update(msg: Message, expected_state: State) {
+        let mut state = State::default();
+        state.update(msg);
+        assert_eq!(state, expected_state);
+    }
 
-        app.render(buf.area, &mut buf);
+    /// test that the given key event produces the given message and the state
+    /// is correctly updated
+    fn test_key_evt(key: event::KeyEvent, expected_msg: Message, expected_state: State) {
+        let msg = handle_key(key).expect("The key event to produce a message");
+        assert_eq!(msg, expected_msg);
 
-        let mut expected = Buffer::with_lines(vec![
-            "┏━━━━━━━━━━━━━━━━━ Main Content ━━━━━━━━━━━━━━━━━┓",
-            "┃                   empty text                   ┃",
-            "┃                                                ┃",
-            "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
-        ]);
-        let title_style = Style::new().bold();
-        let key_style = Style::new().blue().bold();
-        expected.set_style(Rect::new(18, 0, 14, 1), title_style);
-        expected.set_style(Rect::new(13, 3, 6, 1), key_style);
-        expected.set_style(Rect::new(30, 3, 7, 1), key_style);
-        expected.set_style(Rect::new(43, 3, 4, 1), key_style);
-
-        assert_eq!(buf, expected);
+        test_update(msg, expected_state);
     }
 
     #[test]
-    fn handle_key_event() {
-        let mut app = App::default();
-        app.handle_key_event(KeyCode::Char('q').into());
-        assert!(app.exit);
+    fn handle_q_key() {
+        let msg = handle_key(KeyCode::Char('q').into()).unwrap();
+        assert_eq!(msg, Message::Quit);
+
+        let mut state = State::default();
+
+        state.update(msg);
+
+        assert_eq!(state.mode, Mode::Exit);
+
+        test_key_evt(
+            KeyCode::Char('q').into(),
+            Message::Quit,
+            State { mode: Mode::Exit },
+        );
     }
 
     #[test]
