@@ -1,6 +1,6 @@
 use ratatui::{
     Frame,
-    layout::Rect,
+    layout::{Position, Rect},
     style::Stylize,
     symbols::border,
     text::Line,
@@ -22,7 +22,7 @@ pub enum PromptMode {
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct PromptString {
     input: String,
-    character_index: usize,
+    character_index: u16,
 }
 
 impl PromptString {
@@ -40,5 +40,12 @@ impl PromptString {
             .border_set(border::THICK);
 
         frame.render_widget(Paragraph::new(text).left_aligned().block(block), area);
+
+        frame.set_cursor_position(Position::new(
+            // Start at the beginining of the area, move passed the prefix and
+            // space (the `+ 1`) and to the correct `character_index`
+            area.x + prefix.chars().count() as u16 + self.character_index + 1,
+            area.y + 1,
+        ));
     }
 }
