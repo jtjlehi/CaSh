@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use unicode_segmentation::{Graphemes, UnicodeSegmentation};
+use unicode_width::UnicodeWidthStr;
 
 /// The state (string and character position) of a prompt string
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -53,14 +54,14 @@ impl ShellPrompt {
         frame.set_cursor_position(Position::new(
             // Start at the beginining of the area, move passed the prefix and
             // space and to the correct `char_idx`
-            area.x + PREFIX.chars().count() as u16 + self.cursor_pos(),
+            area.x + PREFIX.chars().count() as u16 + self.cursor_pos() as u16,
             area.y + 1,
         ));
     }
 
     /// The position of the cursor (ignoring the prefix)
-    fn cursor_pos(&self) -> u16 {
-        self.grapheme_idx
+    fn cursor_pos(&self) -> usize {
+        self.input[..self.byte_idx()].width_cjk()
     }
 }
 
@@ -218,13 +219,20 @@ mod test {
     }
 
     #[test]
-    #[ignore = "currently failing"]
     fn correct_cursor_pos() {
         assert_eq!(new_shell_prompt("abcd", 3).cursor_pos(), 3);
         // The wide characters should be accounted for in the cursor pos
         assert_eq!(
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 3).cursor_pos(),
+            6
+        );
+        assert_eq!(
             new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 5).cursor_pos(),
-            8
+            10
+        );
+        assert_eq!(
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 8).cursor_pos(),
+            14
         );
     }
 }
