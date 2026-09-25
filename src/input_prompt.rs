@@ -7,28 +7,33 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, Paragraph},
 };
+use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 
 /// The state (string and character position) of a prompt string
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct ShellPrompt {
     input: String,
-    char_idx: u16,
+    grapheme_idx: u16,
 }
 
 /// Helper Functions
 impl ShellPrompt {
     /// The `char_idx` field as a usize
     fn char_idx(&self) -> usize {
-        self.char_idx.into()
+        self.grapheme_idx.into()
     }
 
     /// The index into `input` that is the byte that corresponds to `char_idx`
     fn byte_idx(&self) -> usize {
         self.input
-            .char_indices()
+            .grapheme_indices(true)
             .map(|(i, _)| i)
             .nth(self.char_idx())
             .unwrap_or(self.input.len())
+    }
+
+    fn graphemes(&self) -> Graphemes<'_> {
+        self.input.graphemes(true)
     }
 }
 
@@ -52,9 +57,10 @@ impl ShellPrompt {
             area.y + 1,
         ));
     }
+
     /// The position of the cursor (ignoring the prefix)
     fn cursor_pos(&self) -> u16 {
-        self.char_idx
+        self.grapheme_idx
     }
 }
 
@@ -96,10 +102,10 @@ impl ShellPrompt {
 
     fn move_cursor(&mut self, dir: Dir) {
         let cursor_moved = match dir {
-            Dir::Left => self.char_idx.saturating_sub(1),
-            Dir::Right => self.char_idx.saturating_add(1),
+            Dir::Left => self.grapheme_idx.saturating_sub(1),
+            Dir::Right => self.grapheme_idx.saturating_add(1),
         };
-        self.char_idx = cursor_moved.clamp(0, self.input.chars().count() as u16);
+        self.grapheme_idx = cursor_moved.clamp(0, self.graphemes().count() as u16);
     }
 
     /// insert `new_char` at the current `char_idx`
@@ -119,9 +125,9 @@ impl ShellPrompt {
         // Using remove would require special care because of char boundaries.
 
         // Getting all characters before the selected character.
-        let before_char_to_delete = self.input.chars().take(self.char_idx().saturating_sub(1));
+        let before_char_to_delete = self.graphemes().take(self.char_idx().saturating_sub(1));
         // Getting all characters after selected character.
-        let after_char_to_delete = self.input.chars().skip(self.char_idx());
+        let after_char_to_delete = self.graphemes().skip(self.char_idx());
 
         // Put all characters together except the selected one.
         // By leaving the selected one out, it is forgotten and therefore deleted.
@@ -134,10 +140,10 @@ impl ShellPrompt {
 mod test {
     use super::*;
 
-    fn new_shell_prompt(input: &str, char_idx: u16) -> ShellPrompt {
+    fn new_shell_prompt(input: &str, grapheme_idx: u16) -> ShellPrompt {
         ShellPrompt {
             input: input.to_string(),
-            char_idx,
+            grapheme_idx,
         }
     }
     fn test_delete(input: &str, char_idx: u16, output: &str) {
@@ -147,8 +153,18 @@ mod test {
         );
         let mut prompt = new_shell_prompt(input, char_idx);
         prompt.delete_char();
-        assert_eq!(prompt.input, output);
-        assert_eq!(prompt.char_idx, char_idx - 1);
+        assert_eq!(
+            prompt.input, output,
+            "delete('{input}', {char_idx}), produced '{}' instead of '{output}'",
+            prompt.input
+        );
+        assert_eq!(
+            prompt.grapheme_idx,
+            char_idx - 1,
+            "delete('{input}', {char_idx}), moved char idx to `{}` instead of `{}`",
+            prompt.input,
+            char_idx - 1
+        );
     }
 
     #[test]
@@ -190,11 +206,15 @@ mod test {
     }
 
     #[test]
-    #[ignore = "currently failing"]
     fn delete_unicode_grapheme() {
         // latin small letter e + combining acute accent
         // 2 code points
         test_delete("é", 1, "");
+        test_delete("éabc", 1, "abc");
+        test_delete("é", 1, "");
+        test_delete("éabc", 1, "abc");
+        test_delete("éabc", 2, "ébc");
+        test_delete("aéabc", 2, "aabc");
     }
 
     #[test]

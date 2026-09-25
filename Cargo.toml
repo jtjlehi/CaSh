@@ -10,3 +10,5 @@ repository = "https://github.com/jtjlehi/CaSh.git"
 [dependencies]
 crossterm = "0.29.0"
 ratatui = {version = "0.30.2", features = ["unstable-widget-ref"]}
+unicode-segmentation = "1.13.3"
+unicode-width = "0.2.2"
