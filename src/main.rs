@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::input_prompt::{Message as PromptMessage, PromptMode, PromptString};
+use crate::input_prompt::{Message as PromptMessage, ShellPrompt};
 
 mod input_prompt;
 
@@ -18,15 +18,15 @@ mod input_prompt;
 #[derive(Default, Debug, PartialEq, PartialOrd)]
 pub struct State {
     mode: Mode,
-    prompt_string: PromptString,
+    prompt_string: ShellPrompt,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Mode {
     #[default]
     Normal,
-    /// Currently editing the prompt
-    EditPrompt(PromptMode),
+    /// Currently typing in a command in the shell
+    Shell,
     /// It is time to exit/close the app
     Exit,
 }
@@ -76,19 +76,18 @@ impl State {
         );
 
         // render the prompt if in edit mode
-        if let Mode::EditPrompt(mode) = self.mode {
-            self.prompt_string.render(mode, layout.prompt_layout, frame);
+        if let Mode::Shell = self.mode {
+            self.prompt_string.render(layout.prompt_layout, frame);
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Message {
+    /// Transition to the given mode
+    ToMode(Mode),
     /// Quit the application
     Quit,
-    ToPrompt(PromptMode),
-    /// Switch to normal mode
-    ToNormal,
 
     PromptMessage(PromptMessage),
 }
@@ -99,8 +98,7 @@ impl State {
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::Quit => self.mode = Mode::Exit,
-            Message::ToNormal => self.mode = Mode::Normal,
-            Message::ToPrompt(mode) => self.mode = Mode::EditPrompt(mode),
+            Message::ToMode(mode) => self.mode = mode,
             Message::PromptMessage(msg) => self.prompt_string.update(msg),
         }
     }
@@ -119,12 +117,12 @@ fn handle_key(mode: Mode, key: event::KeyEvent) -> Option<Message> {
     match mode {
         Mode::Normal => match key.code {
             KeyCode::Char('q') => Some(Message::Quit),
-            KeyCode::Char('!') => Some(Message::ToPrompt(PromptMode::Shell)),
+            KeyCode::Char('!') => Some(Message::ToMode(Mode::Shell)),
             _ => None,
         },
-        Mode::EditPrompt(_) => match key.code {
+        Mode::Shell => match key.code {
             // Exit prompt mode back to normal mode
-            KeyCode::Esc => Some(Message::ToNormal),
+            KeyCode::Esc => Some(Message::ToMode(Mode::Normal)),
             _ => input_prompt::handle_key(key).map(Message::PromptMessage),
         },
         Mode::Exit => None,

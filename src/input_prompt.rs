@@ -8,32 +8,17 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-/// The mode of the prompt (should be nested in a `crate::Mode` variant)
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub enum PromptMode {
-    /// Currently entering a shell command
-    Shell,
-    /// Currently entering a tui command
-    Command,
-    /// Currently searching
-    Search,
-}
-
 /// The state (string and character position) of a prompt string
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
-pub struct PromptString {
+pub struct ShellPrompt {
     input: String,
     character_index: u16,
 }
 
-impl PromptString {
-    pub fn render(&self, mode: PromptMode, area: Rect, frame: &mut Frame) {
-        let prefix = match mode {
-            PromptMode::Shell => "!",
-            PromptMode::Command => ":",
-            PromptMode::Search => "/",
-        };
-        let text = Line::from(vec![prefix.bold(), " ".into(), self.input.as_str().into()]);
+impl ShellPrompt {
+    pub fn render(&self, area: Rect, frame: &mut Frame) {
+        const PREFIX: &str = "! ";
+        let text = Line::from(vec![PREFIX.bold(), self.input.as_str().into()]);
 
         let block = Block::new()
             .borders(Borders::TOP)
@@ -45,7 +30,7 @@ impl PromptString {
         frame.set_cursor_position(Position::new(
             // Start at the beginining of the area, move passed the prefix and
             // space (the `+ 1`) and to the correct `character_index`
-            area.x + prefix.chars().count() as u16 + self.character_index + 1,
+            area.x + PREFIX.chars().count() as u16 + self.character_index,
             area.y + 1,
         ));
     }
@@ -76,7 +61,7 @@ pub fn handle_key(key: event::KeyEvent) -> Option<Message> {
     })
 }
 
-impl PromptString {
+impl ShellPrompt {
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::MoveCursor(dir) => self.move_cursor(dir),
