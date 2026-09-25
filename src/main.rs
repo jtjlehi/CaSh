@@ -27,8 +27,6 @@ pub enum Mode {
     Normal,
     /// Currently typing in a command in the shell
     Shell,
-    /// It is time to exit/close the app
-    Exit,
 }
 
 struct AppLayout {
@@ -84,23 +82,25 @@ impl State {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Message {
-    /// Transition to the given mode
-    ToMode(Mode),
     /// Quit the application
     Quit,
-
+    /// Transition to the given mode
+    ToMode(Mode),
     PromptMessage(PromptMessage),
 }
 
 /// The `update` logic
 impl State {
     /// Update the state based on the message passsed
-    pub fn update(&mut self, msg: Message) {
+    ///
+    /// If the app is quitting, it returns `None`
+    pub fn update(mut self, msg: Message) -> Option<State> {
         match msg {
-            Message::Quit => self.mode = Mode::Exit,
+            Message::Quit => return None,
             Message::ToMode(mode) => self.mode = mode,
             Message::PromptMessage(msg) => self.prompt_string.update(msg),
         }
+        Some(self)
     }
 }
 
@@ -125,17 +125,16 @@ fn handle_key(mode: Mode, key: event::KeyEvent) -> Option<Message> {
             KeyCode::Esc => Some(Message::ToMode(Mode::Normal)),
             _ => input_prompt::handle_key(key).map(Message::PromptMessage),
         },
-        Mode::Exit => None,
     }
 }
 
 fn main() -> io::Result<()> {
     ratatui::run(|terminal| -> io::Result<()> {
-        let mut state = State::default();
-        while state.mode != Mode::Exit {
+        let mut state_opt = Some(State::default());
+        while let Some(state) = state_opt.take() {
             terminal.draw(|f| state.view(f))?;
             if let Some(msg) = handle_event(&state)? {
-                state.update(msg);
+                state_opt = state.update(msg);
             }
         }
         Ok(())
@@ -147,41 +146,23 @@ fn main() -> io::Result<()> {
 mod tests {
     use super::*;
 
-    /// Tests that the given message updates the state correctly (from the default state)
-    fn test_update(msg: Message, expected_state: State) {
-        let mut state = State::default();
-        state.update(msg);
-        assert_eq!(state, expected_state);
-    }
-
     /// test that the given key event produces the given message and the state
     /// is correctly updated
-    fn test_normal_key_evt(key: event::KeyEvent, expected_msg: Message, expected_state: State) {
-        let msg = handle_key(Mode::Normal, key).expect("The key event to produce a message");
-        assert_eq!(msg, expected_msg);
-
-        test_update(msg, expected_state);
+    fn test_normal_key_evt(key: event::KeyEvent, expected_msg: Message) {
+        assert_eq!(
+            handle_key(Mode::Normal, key).expect("The key event to produce a message"),
+            expected_msg
+        );
     }
 
     #[test]
-    fn handle_q_key() {
-        let msg = handle_key(Mode::Normal, KeyCode::Char('q').into()).unwrap();
-        assert_eq!(msg, Message::Quit);
+    fn normal_q_key_quits() {
+        test_normal_key_evt(KeyCode::Char('q').into(), Message::Quit);
+    }
 
-        let mut state = State::default();
-
-        state.update(msg);
-
-        assert_eq!(state.mode, Mode::Exit);
-
-        test_normal_key_evt(
-            KeyCode::Char('q').into(),
-            Message::Quit,
-            State {
-                mode: Mode::Exit,
-                ..State::default()
-            },
-        );
+    #[test]
+    fn quit_message_quits() {
+        assert_eq!(State::default().update(Message::Quit), None);
     }
 
     #[test]
