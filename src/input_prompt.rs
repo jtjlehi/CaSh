@@ -12,9 +12,27 @@ use ratatui::{
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct ShellPrompt {
     input: String,
-    character_index: u16,
+    char_idx: u16,
 }
 
+/// Helper Functions
+impl ShellPrompt {
+    /// The `char_idx` field as a usize
+    fn char_idx(&self) -> usize {
+        self.char_idx.into()
+    }
+
+    /// The index into `input` that is the byte that corresponds to `char_idx`
+    fn byte_idx(&self) -> usize {
+        self.input
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.char_idx())
+            .unwrap_or(self.input.len())
+    }
+}
+
+/// Rendering logic
 impl ShellPrompt {
     pub fn render(&self, area: Rect, frame: &mut Frame) {
         const PREFIX: &str = "! ";
@@ -29,10 +47,14 @@ impl ShellPrompt {
 
         frame.set_cursor_position(Position::new(
             // Start at the beginining of the area, move passed the prefix and
-            // space and to the correct `character_index`
-            area.x + PREFIX.chars().count() as u16 + self.character_index,
+            // space and to the correct `char_idx`
+            area.x + PREFIX.chars().count() as u16 + self.cursor_pos(),
             area.y + 1,
         ));
+    }
+    /// The position of the cursor (ignoring the prefix)
+    fn cursor_pos(&self) -> u16 {
+        self.char_idx
     }
 }
 
@@ -61,6 +83,7 @@ pub fn handle_key(key: event::KeyEvent) -> Option<Message> {
     })
 }
 
+/// Update Logic
 impl ShellPrompt {
     pub fn update(&mut self, msg: Message) {
         match msg {
@@ -73,28 +96,22 @@ impl ShellPrompt {
 
     fn move_cursor(&mut self, dir: Dir) {
         let cursor_moved = match dir {
-            Dir::Left => self.character_index.saturating_sub(1),
-            Dir::Right => self.character_index.saturating_add(1),
+            Dir::Left => self.char_idx.saturating_sub(1),
+            Dir::Right => self.char_idx.saturating_add(1),
         };
-        self.character_index = cursor_moved.clamp(0, self.input.chars().count() as u16);
+        self.char_idx = cursor_moved.clamp(0, self.input.chars().count() as u16);
     }
 
-    /// insert `new_char` at the current `character_index`
+    /// insert `new_char` at the current `char_idx`
     fn insert_char(&mut self, new_char: char) {
         // Since each character in a string can contain multiple bytes,
         // it's necessary to calculate the byte index based on the index of
         // the character.
-        let index = self
-            .input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.character_index())
-            .unwrap_or(self.input.len());
-        self.input.insert(index, new_char);
+        self.input.insert(self.byte_idx(), new_char);
         self.move_cursor(Dir::Right);
     }
 
-    /// Delete the character at the current `character_index`
+    /// Delete the character at the current `char_idx`
     // FIXME: I don't like how this is done. seems like it's needlessly allocating
     fn delete_char(&mut self) {
         // Method "remove" is not used on the saved text for deleting the selected char.
@@ -102,20 +119,92 @@ impl ShellPrompt {
         // Using remove would require special care because of char boundaries.
 
         // Getting all characters before the selected character.
-        let before_char_to_delete = self
-            .input
-            .chars()
-            .take(self.character_index().saturating_sub(1));
+        let before_char_to_delete = self.input.chars().take(self.char_idx().saturating_sub(1));
         // Getting all characters after selected character.
-        let after_char_to_delete = self.input.chars().skip(self.character_index());
+        let after_char_to_delete = self.input.chars().skip(self.char_idx());
 
         // Put all characters together except the selected one.
         // By leaving the selected one out, it is forgotten and therefore deleted.
         self.input = before_char_to_delete.chain(after_char_to_delete).collect();
         self.move_cursor(Dir::Left);
     }
+}
 
-    fn character_index(&self) -> usize {
-        self.character_index.into()
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn new_shell_prompt(input: &str, char_idx: u16) -> ShellPrompt {
+        ShellPrompt {
+            input: input.to_string(),
+            char_idx,
+        }
+    }
+    fn test_delete(input: &str, char_idx: u16, output: &str) {
+        assert!(
+            usize::from(char_idx) < input.chars().count() + 1 && char_idx > 0,
+            "delete_char test configured with invalid `char_idx`"
+        );
+        let mut prompt = new_shell_prompt(input, char_idx);
+        prompt.delete_char();
+        assert_eq!(prompt.input, output);
+        assert_eq!(prompt.char_idx, char_idx - 1);
+    }
+
+    #[test]
+    fn delete_at_zero() {
+        let mut prompt = ShellPrompt::default();
+        let expected = prompt.clone();
+        prompt.delete_char();
+        assert_eq!(prompt, expected);
+
+        prompt.input = "abc".to_string();
+        let expected = prompt.clone();
+        prompt.delete_char();
+        assert_eq!(prompt, expected);
+    }
+
+    #[test]
+    fn delete_char_ascii() {
+        test_delete("a", 1, "");
+        test_delete("abc", 3, "ab");
+        test_delete("abc", 2, "ac");
+    }
+
+    #[test]
+    fn delete_unicode_codepoint() {
+        // latin small letter e with acute
+        // single code point
+        test_delete("é", 1, "");
+        test_delete("éabc", 1, "abc");
+        test_delete("éabc", 2, "ébc");
+        test_delete("aéabc", 2, "aabc");
+    }
+
+    #[test]
+    fn delete_unicode_wide_codepoint() {
+        test_delete("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 2, "Ｈｌｌｏ, ｗｏｒｌｄ!");
+        test_delete("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 5, "Ｈｅｌｌ, ｗｏｒｌｄ!");
+        test_delete("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 7, "Ｈｅｌｌｏ,ｗｏｒｌｄ!");
+        test_delete("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 9, "Ｈｅｌｌｏ, ｗｒｌｄ!");
+    }
+
+    #[test]
+    #[ignore = "currently failing"]
+    fn delete_unicode_grapheme() {
+        // latin small letter e + combining acute accent
+        // 2 code points
+        test_delete("é", 1, "");
+    }
+
+    #[test]
+    #[ignore = "currently failing"]
+    fn correct_cursor_pos() {
+        assert_eq!(new_shell_prompt("abcd", 3).cursor_pos(), 3);
+        // The wide characters should be accounted for in the cursor pos
+        assert_eq!(
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 5).cursor_pos(),
+            8
+        );
     }
 }
