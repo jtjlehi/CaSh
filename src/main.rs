@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use crate::input_prompt::{PromptMode, PromptString};
+use crate::input_prompt::{Message as PromptMessage, PromptMode, PromptString};
 
 mod input_prompt;
 
@@ -86,7 +86,11 @@ impl State {
 pub enum Message {
     /// Quit the application
     Quit,
-    EnterShell,
+    ToPrompt(PromptMode),
+    /// Switch to normal mode
+    ToNormal,
+
+    PromptMessage(PromptMessage),
 }
 
 /// The `update` logic
@@ -94,10 +98,10 @@ impl State {
     /// Update the state based on the message passsed
     pub fn update(&mut self, msg: Message) {
         match msg {
-            Message::Quit => {
-                self.mode = Mode::Exit;
-            }
-            Message::EnterShell => self.mode = Mode::EditPrompt(PromptMode::Shell),
+            Message::Quit => self.mode = Mode::Exit,
+            Message::ToNormal => self.mode = Mode::Normal,
+            Message::ToPrompt(mode) => self.mode = Mode::EditPrompt(mode),
+            Message::PromptMessage(msg) => self.prompt_string.update(msg),
         }
     }
 }
@@ -115,13 +119,13 @@ fn handle_key(mode: Mode, key: event::KeyEvent) -> Option<Message> {
     match mode {
         Mode::Normal => match key.code {
             KeyCode::Char('q') => Some(Message::Quit),
-            KeyCode::Char('!') => Some(Message::EnterShell),
+            KeyCode::Char('!') => Some(Message::ToPrompt(PromptMode::Shell)),
             _ => None,
         },
         Mode::EditPrompt(_) => match key.code {
-            // FIXME: place holder so entering `EditPrompt` mode doesn't break stuff
-            KeyCode::Esc => Some(Message::Quit),
-            _ => None,
+            // Exit prompt mode back to normal mode
+            KeyCode::Esc => Some(Message::ToNormal),
+            _ => input_prompt::handle_key(key).map(Message::PromptMessage),
         },
         Mode::Exit => None,
     }
