@@ -1,7 +1,6 @@
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use input_prompt::InputPrompt;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -11,19 +10,23 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
+use crate::input_prompt::{PromptMode, PromptString};
+
 mod input_prompt;
 
-#[derive(Default, Debug, PartialEq, PartialOrd)]
 /// The full state of the app
+#[derive(Default, Debug, PartialEq, PartialOrd)]
 pub struct State {
     mode: Mode,
+    prompt_string: PromptString,
 }
 
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Mode {
     #[default]
     Normal,
-    EditPrompt,
+    /// Currently editing the prompt
+    EditPrompt(PromptMode),
     /// It is time to exit/close the app
     Exit,
 }
@@ -71,6 +74,11 @@ impl State {
             Paragraph::new("empty text").centered().block(block),
             layout.body_layout,
         );
+
+        // render the prompt if in edit mode
+        if let Mode::EditPrompt(mode) = self.mode {
+            self.prompt_string.render(mode, layout.prompt_layout, frame);
+        }
     }
 }
 
@@ -78,6 +86,7 @@ impl State {
 pub enum Message {
     /// Quit the application
     Quit,
+    EnterShell,
 }
 
 /// The `update` logic
@@ -88,25 +97,33 @@ impl State {
             Message::Quit => {
                 self.mode = Mode::Exit;
             }
+            Message::EnterShell => self.mode = Mode::EditPrompt(PromptMode::Shell),
         }
     }
 }
 
-pub fn handle_event(_: &State) -> io::Result<Option<Message>> {
+pub fn handle_event(state: &State) -> io::Result<Option<Message>> {
     match event::read()? {
         // it's important to check that the event is a key press event as
         // crossterm also emits key release and repeat events on Windows.
-        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(handle_key(key)),
+        Event::Key(key) if key.kind == KeyEventKind::Press => Ok(handle_key(state.mode, key)),
         _ => Ok(None),
     }
 }
 
-fn handle_key(key: event::KeyEvent) -> Option<Message> {
-    match key.code {
-        // KeyCode::Char('j') => Some(Message::Increment),
-        // KeyCode::Char('k') => Some(Message::Decrement),
-        KeyCode::Char('q') => Some(Message::Quit),
-        _ => None,
+fn handle_key(mode: Mode, key: event::KeyEvent) -> Option<Message> {
+    match mode {
+        Mode::Normal => match key.code {
+            KeyCode::Char('q') => Some(Message::Quit),
+            KeyCode::Char('!') => Some(Message::EnterShell),
+            _ => None,
+        },
+        Mode::EditPrompt(_) => match key.code {
+            // FIXME: place holder so entering `EditPrompt` mode doesn't break stuff
+            KeyCode::Esc => Some(Message::Quit),
+            _ => None,
+        },
+        Mode::Exit => None,
     }
 }
 
@@ -137,8 +154,8 @@ mod tests {
 
     /// test that the given key event produces the given message and the state
     /// is correctly updated
-    fn test_key_evt(key: event::KeyEvent, expected_msg: Message, expected_state: State) {
-        let msg = handle_key(key).expect("The key event to produce a message");
+    fn test_normal_key_evt(key: event::KeyEvent, expected_msg: Message, expected_state: State) {
+        let msg = handle_key(Mode::Normal, key).expect("The key event to produce a message");
         assert_eq!(msg, expected_msg);
 
         test_update(msg, expected_state);
@@ -146,7 +163,7 @@ mod tests {
 
     #[test]
     fn handle_q_key() {
-        let msg = handle_key(KeyCode::Char('q').into()).unwrap();
+        let msg = handle_key(Mode::Normal, KeyCode::Char('q').into()).unwrap();
         assert_eq!(msg, Message::Quit);
 
         let mut state = State::default();
@@ -155,10 +172,13 @@ mod tests {
 
         assert_eq!(state.mode, Mode::Exit);
 
-        test_key_evt(
+        test_normal_key_evt(
             KeyCode::Char('q').into(),
             Message::Quit,
-            State { mode: Mode::Exit },
+            State {
+                mode: Mode::Exit,
+                ..State::default()
+            },
         );
     }
 
