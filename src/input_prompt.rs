@@ -147,24 +147,55 @@ mod test {
             grapheme_idx,
         }
     }
-    fn test_delete(input: &str, char_idx: u16, output: &str) {
+
+    // Now with a `new_char` !!!!
+    fn test_insert(input: &str, grapheme_idx: u16, new_char: char, output: &str) {
+        let mut prompt = new_shell_prompt(input, grapheme_idx);
+        prompt.insert_char(new_char);
+        assert_eq!(
+            prompt.input, output,
+            "input('{input}', {grapheme_idx}), produced '{}' instead of '{output}'",
+            prompt.input
+        );
+
+        assert_eq!(
+            prompt.grapheme_idx,
+            grapheme_idx + 1,
+            "delete('{input}', {grapheme_idx}), moved char idx to `{}` instead of `{}`",
+            prompt.grapheme_idx,
+            grapheme_idx + 1
+        );
+    }
+
+    #[test]
+    fn insert_works() {
+        test_insert("", 0, 'a', "a");
+        test_insert("abc", 3, 'd', "abcd");
+        test_insert("abc", 0, 'd', "dabc");
+        test_insert("abc", 2, 'd', "abdc");
+        test_insert("abc", 3, 'Ｈ', "abcＨ");
+        test_insert("abc", 0, 'Ｈ', "Ｈabc");
+        test_insert("abc", 2, 'Ｈ', "abＨc");
+    }
+
+    fn test_delete(input: &str, grapheme_idx: u16, output: &str) {
         assert!(
-            usize::from(char_idx) < input.chars().count() + 1 && char_idx > 0,
+            usize::from(grapheme_idx) < input.chars().count() + 1 && grapheme_idx > 0,
             "delete_char test configured with invalid `char_idx`"
         );
-        let mut prompt = new_shell_prompt(input, char_idx);
+        let mut prompt = new_shell_prompt(input, grapheme_idx);
         prompt.delete_char();
         assert_eq!(
             prompt.input, output,
-            "delete('{input}', {char_idx}), produced '{}' instead of '{output}'",
+            "delete('{input}', {grapheme_idx}), produced '{}' instead of '{output}'",
             prompt.input
         );
         assert_eq!(
             prompt.grapheme_idx,
-            char_idx - 1,
-            "delete('{input}', {char_idx}), moved char idx to `{}` instead of `{}`",
-            prompt.input,
-            char_idx - 1
+            grapheme_idx - 1,
+            "delete('{input}', {grapheme_idx}), moved char idx to `{}` instead of `{}`",
+            prompt.grapheme_idx,
+            grapheme_idx - 1
         );
     }
 
