@@ -87,6 +87,10 @@ pub enum Message {
     /// Transition to the given mode
     ToMode(Mode),
     PromptMessage(PromptMessage),
+    /// Enter the command in the Prompt
+    ///
+    /// Doing this will pass commands down to `PromptShell::update`
+    EnterCmd,
 }
 
 /// The `update` logic
@@ -99,6 +103,11 @@ impl State {
             Message::Quit => return None,
             Message::ToMode(mode) => self.mode = mode,
             Message::PromptMessage(msg) => self.prompt_string.update(msg),
+            Message::EnterCmd => {
+                // TODO: actually enter the command
+
+                self.prompt_string.update(PromptMessage::Reset);
+            }
         }
         Some(self)
     }
@@ -123,6 +132,7 @@ fn handle_key(mode: Mode, key: event::KeyEvent) -> Option<Message> {
         Mode::Shell => match key.code {
             // Exit prompt mode back to normal mode
             KeyCode::Esc => Some(Message::ToMode(Mode::Normal)),
+            KeyCode::Enter => Some(Message::EnterCmd),
             _ => input_prompt::handle_key(key).map(Message::PromptMessage),
         },
     }

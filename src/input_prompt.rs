@@ -70,7 +70,7 @@ pub enum Message {
     MoveCursor(Dir),
     Insert(char),
     Delete,
-    Enter,
+    Reset,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -85,7 +85,6 @@ pub fn handle_key(key: event::KeyEvent) -> Option<Message> {
         KeyCode::Left => Message::MoveCursor(Dir::Left),
         KeyCode::Right => Message::MoveCursor(Dir::Right),
         KeyCode::Backspace => Message::Delete,
-        KeyCode::Enter => Message::Enter,
         _ => return None,
     })
 }
@@ -97,7 +96,7 @@ impl ShellPrompt {
             Message::MoveCursor(dir) => self.move_cursor(dir),
             Message::Insert(to_insert) => self.insert_char(to_insert),
             Message::Delete => self.delete_char(),
-            Message::Enter => todo!(),
+            Message::Reset => self.reset(),
         }
     }
 
@@ -134,6 +133,11 @@ impl ShellPrompt {
         // By leaving the selected one out, it is forgotten and therefore deleted.
         self.input = before_char_to_delete.chain(after_char_to_delete).collect();
         self.move_cursor(Dir::Left);
+    }
+
+    fn reset(&mut self) {
+        self.input.clear();
+        self.grapheme_idx = 0;
     }
 }
 
