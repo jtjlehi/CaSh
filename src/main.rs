@@ -145,6 +145,8 @@ fn main() -> io::Result<()> {
             terminal.draw(|f| state.view(f))?;
             if let Some(msg) = handle_event(&state)? {
                 state_opt = state.update(msg);
+            } else {
+                state_opt = Some(state);
             }
         }
         Ok(())
