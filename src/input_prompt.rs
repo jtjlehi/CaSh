@@ -10,8 +10,7 @@
 
 use crossterm::event::{self, KeyCode};
 use ratatui::{
-    Frame,
-    layout::{Position, Rect},
+    Frame, layout,
     style::Stylize,
     symbols::border,
     text::Line,
@@ -53,10 +52,7 @@ impl ShellPrompt {
 /// Rendering logic
 impl ShellPrompt {
     /// Display/render the widget to the given `area` in the provided `frame`
-    ///
-    /// This function will set the cursor position so make sure this isn't called
-    /// with anything else that sets the cursor
-    pub fn render(&self, area: Rect, frame: &mut Frame<'_>) {
+    pub fn render(&self, area: layout::Rect, frame: &mut Frame<'_>) {
         let text = Line::from(vec![Self::PREFIX.bold(), self.input.as_str().into()]);
 
         let block = Block::new()
@@ -65,29 +61,36 @@ impl ShellPrompt {
             .border_set(border::THICK);
 
         frame.render_widget(Paragraph::new(text).left_aligned().block(block), area);
-
-        frame.set_cursor_position(Position::new(
-            // Start at the beginining of the area, move passed the prefix and
-            // space and to the correct `char_idx`
-            area.x + Self::prefix_len() + self.cursor_offset(),
-            area.y + 1,
-        ));
     }
 
     const PREFIX: &str = "! ";
 
-    #[expect(clippy::cast_possible_truncation)]
-    fn prefix_len() -> u16 {
-        Self::PREFIX.graphemes(true).count() as u16
-    }
-
     /// The position of the cursor (ignoring the prefix)
-    fn cursor_offset(&self) -> u16 {
+    fn cursor_offset(&self) -> i32 {
         // FIXME: We should bound the cursor within the screen
         self.input[..self.byte_idx()]
             .width_cjk()
             .try_into()
             .unwrap()
+    }
+
+    /// The position of the cursor within the given area
+    ///
+    /// # Panics
+    ///
+    /// Panics if the prefix width or input width doesn't fit within an `i32`
+    pub fn cursor_pos(&self) -> layout::Offset {
+        let prefix_width: i32 = Self::PREFIX
+            .width_cjk()
+            .try_into()
+            .expect("the prefix length to fit in 31 bits");
+
+        layout::Offset::new(
+            // Start at the beginining of the area, move passed the prefix and
+            // space and to the correct `char_idx`
+            prefix_width + self.cursor_offset(),
+            1,
+        )
     }
 }
 

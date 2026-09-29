@@ -5,7 +5,7 @@ use std::io;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Position, Rect},
 };
 
 use crate::body_content::BodyContent;
@@ -62,8 +62,19 @@ impl State {
         frame.render_widget(&self.body_content, layout.body_layout);
 
         // render the prompt if in edit mode
-        if let Mode::Shell = self.mode {
-            self.prompt_string.render(layout.prompt_layout, frame);
+        self.prompt_string.render(layout.prompt_layout, frame);
+
+        if let Some(cursor_pos) = self.cursor_pos(&layout) {
+            frame.set_cursor_position(cursor_pos);
+        }
+    }
+
+    fn cursor_pos(&self, layout: &AppLayout) -> Option<Position> {
+        match self.mode {
+            Mode::Normal => None,
+            Mode::Shell => {
+                Some(Position::from(layout.prompt_layout) + self.prompt_string.cursor_pos())
+            }
         }
     }
 }
