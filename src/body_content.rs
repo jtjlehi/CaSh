@@ -12,10 +12,20 @@ use std::sync::Arc;
 use ratatui::{Frame, layout::Rect};
 
 /// The state/widget for the body of the tui
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct BodyContent {
     /// Shared pointer to the contents to display
     content: Arc<str>,
+    title: String,
+}
+
+impl Default for BodyContent {
+    fn default() -> Self {
+        Self {
+            content: Arc::default(),
+            title: "No Content".to_string(),
+        }
+    }
 }
 
 /// Rendering logic
