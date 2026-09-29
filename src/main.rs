@@ -6,12 +6,9 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::Stylize,
-    symbols::border,
-    text::Line,
-    widgets::{Block, Paragraph},
 };
 
+use crate::body_content::BodyContent;
 use crate::input_prompt::{Message as PromptMessage, ShellPrompt};
 
 pub mod body_content;
@@ -21,7 +18,10 @@ pub mod input_prompt;
 #[derive(Default, Debug, PartialEq, PartialOrd)]
 pub struct State {
     mode: Mode,
+    /// The shell prompt widget state
     prompt_string: ShellPrompt,
+    /// The body content widget state
+    body_content: BodyContent,
 }
 
 /// The global mode of the ui
@@ -59,24 +59,7 @@ impl State {
     pub fn view(&self, frame: &mut Frame<'_>) {
         let layout = AppLayout::new(frame.area());
 
-        // Draw the main content (for now it isn't a seperate thing)
-        let title = Line::from(" Main Content ".bold());
-        let instructions = Line::from(vec![
-            " Decrement ".into(),
-            "<Left>".blue().bold(),
-            " Increment ".into(),
-            "<Right>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
-        let block = Block::bordered()
-            .title(title.centered())
-            .title_bottom(instructions.centered())
-            .border_set(border::THICK);
-        frame.render_widget(
-            Paragraph::new("empty text").centered().block(block),
-            layout.body_layout,
-        );
+        frame.render_widget(&self.body_content, layout.body_layout);
 
         // render the prompt if in edit mode
         if let Mode::Shell = self.mode {

@@ -9,7 +9,14 @@
 
 use std::sync::Arc;
 
-use ratatui::{Frame, layout::Rect};
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::Stylize,
+    symbols::border,
+    text::Line,
+    widgets::{Block, Paragraph, Widget},
+};
 
 /// The state/widget for the body of the tui
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -29,10 +36,16 @@ impl Default for BodyContent {
 }
 
 /// Rendering logic
-impl BodyContent {
+impl Widget for &BodyContent {
     /// Display/render the body
-    pub fn render(&self, _area: Rect, _frame: &mut Frame<'_>) {
-        todo!()
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = Block::bordered()
+            .title(Line::from(self.title.as_str().bold()).centered())
+            .border_set(border::THICK);
+        Paragraph::new(&self.content[..])
+            .centered()
+            .block(block)
+            .render(area, buf);
     }
 }
 
