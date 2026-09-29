@@ -10,11 +10,11 @@
 
 use crossterm::event::{self, KeyCode};
 use ratatui::{
-    Frame, layout,
+    layout,
     style::Stylize,
     symbols::border,
     text::Line,
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 use unicode_width::UnicodeWidthStr;
@@ -22,10 +22,21 @@ use unicode_width::UnicodeWidthStr;
 /// The state (string and character position) of a prompt string
 ///
 /// See module level docs for more information
-#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct ShellPrompt {
+    prefix: String,
     input: String,
     grapheme_idx: u16,
+}
+
+impl Default for ShellPrompt {
+    fn default() -> Self {
+        Self {
+            prefix: "! ".to_string(),
+            input: String::default(),
+            grapheme_idx: Default::default(),
+        }
+    }
 }
 
 /// Helper Functions
@@ -49,22 +60,27 @@ impl ShellPrompt {
     }
 }
 
-/// Rendering logic
-impl ShellPrompt {
-    /// Display/render the widget to the given `area` in the provided `frame`
-    pub fn render(&self, area: layout::Rect, frame: &mut Frame<'_>) {
-        let text = Line::from(vec![Self::PREFIX.bold(), self.input.as_str().into()]);
+impl Widget for &ShellPrompt {
+    fn render(self, area: ratatui::prelude::Rect, buf: &mut ratatui::prelude::Buffer) {
+        let text = Line::from(vec![
+            self.prefix.as_str().bold(),
+            self.input.as_str().into(),
+        ]);
 
         let block = Block::new()
             .borders(Borders::TOP)
             .title(Line::from(" Input Prompt ".bold()))
             .border_set(border::THICK);
 
-        frame.render_widget(Paragraph::new(text).left_aligned().block(block), area);
+        Paragraph::new(text)
+            .left_aligned()
+            .block(block)
+            .render(area, buf);
     }
+}
 
-    const PREFIX: &str = "! ";
-
+/// Rendering logic
+impl ShellPrompt {
     /// The position of the cursor (ignoring the prefix)
     fn cursor_offset(&self) -> i32 {
         // FIXME: We should bound the cursor within the screen
@@ -80,7 +96,8 @@ impl ShellPrompt {
     ///
     /// Panics if the prefix width or input width doesn't fit within an `i32`
     pub fn cursor_pos(&self) -> layout::Offset {
-        let prefix_width: i32 = Self::PREFIX
+        let prefix_width: i32 = self
+            .prefix
             .width_cjk()
             .try_into()
             .expect("the prefix length to fit in 31 bits");
@@ -199,6 +216,7 @@ mod test {
         ShellPrompt {
             input: input.to_string(),
             grapheme_idx,
+            ..ShellPrompt::default()
         }
     }
 

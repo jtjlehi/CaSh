@@ -60,10 +60,9 @@ impl State {
         let layout = AppLayout::new(frame.area());
 
         frame.render_widget(&self.body_content, layout.body_layout);
+        frame.render_widget(&self.prompt_string, layout.prompt_layout);
 
-        // render the prompt if in edit mode
-        self.prompt_string.render(layout.prompt_layout, frame);
-
+        // draw the cursor
         if let Some(cursor_pos) = self.cursor_pos(&layout) {
             frame.set_cursor_position(cursor_pos);
         }
