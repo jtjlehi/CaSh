@@ -1,3 +1,13 @@
+//! The [`ShellPrompt`] widget and logic
+//!
+//! Displaying and updating [`ShellPrompt`] are controlled through:
+//! - [`render`]: How to display the widget
+//! - [`update`]: How to update the widget based on the passed [`Message`]s
+//! - [`handle_key`]: What messages to create based on the keys pressed
+//!
+//! [`render`]: ShellPrompt::render
+//! [`update`]: ShellPrompt::update
+
 use crossterm::event::{self, KeyCode};
 use ratatui::{
     Frame,
@@ -11,6 +21,8 @@ use unicode_segmentation::{Graphemes, UnicodeSegmentation};
 use unicode_width::UnicodeWidthStr;
 
 /// The state (string and character position) of a prompt string
+///
+/// See module level docs for more information
 #[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct ShellPrompt {
     input: String,
@@ -40,9 +52,12 @@ impl ShellPrompt {
 
 /// Rendering logic
 impl ShellPrompt {
-    pub fn render(&self, area: Rect, frame: &mut Frame) {
-        const PREFIX: &str = "! ";
-        let text = Line::from(vec![PREFIX.bold(), self.input.as_str().into()]);
+    /// Display/render the widget to the given `area` in the provided `frame`
+    ///
+    /// This function will set the cursor position so make sure this isn't called
+    /// with anything else that sets the cursor
+    pub fn render(&self, area: Rect, frame: &mut Frame<'_>) {
+        let text = Line::from(vec![Self::PREFIX.bold(), self.input.as_str().into()]);
 
         let block = Block::new()
             .borders(Borders::TOP)
@@ -54,31 +69,60 @@ impl ShellPrompt {
         frame.set_cursor_position(Position::new(
             // Start at the beginining of the area, move passed the prefix and
             // space and to the correct `char_idx`
-            area.x + PREFIX.chars().count() as u16 + self.cursor_pos() as u16,
+            area.x + Self::prefix_len() + self.cursor_offset(),
             area.y + 1,
         ));
     }
 
+    const PREFIX: &str = "! ";
+
+    #[expect(clippy::cast_possible_truncation)]
+    fn prefix_len() -> u16 {
+        Self::PREFIX.graphemes(true).count() as u16
+    }
+
     /// The position of the cursor (ignoring the prefix)
-    fn cursor_pos(&self) -> usize {
-        self.input[..self.byte_idx()].width_cjk()
+    fn cursor_offset(&self) -> u16 {
+        // FIXME: We should bound the cursor within the screen
+        self.input[..self.byte_idx()]
+            .width_cjk()
+            .try_into()
+            .unwrap()
     }
 }
 
+/// Messages/Events for the [`ShellPrompt`] widget
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[expect(
+    variant_size_differences,
+    reason = "we need to be able to insert `char`s"
+)]
 pub enum Message {
+    /// Move the cursor in the direction specified
     MoveCursor(Dir),
+    /// Insert the given Unicode character at the position of the current cursor
     Insert(char),
+    /// Delete the character before the cursor
     Delete,
+    /// Completely reset the string (don't deallocate)
     Reset,
 }
 
+/// The direction to move the cursor
+///
+/// It doesn't make sense (at least right now) to support up and down.
+/// I may add support for it in the future if it makes sense.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Dir {
+    /// Move left
     Left,
+    /// Move right
     Right,
 }
 
+/// Converts the [`KeyEvent`] into a [`Message`]
+///
+/// [`KeyEvent`]: event::KeyEvent
 pub fn handle_key(key: event::KeyEvent) -> Option<Message> {
     Some(match key.code {
         KeyCode::Char(to_insert) => Message::Insert(to_insert),
@@ -91,6 +135,9 @@ pub fn handle_key(key: event::KeyEvent) -> Option<Message> {
 
 /// Update Logic
 impl ShellPrompt {
+    /// Update the prompt with the given [`Message`]
+    ///
+    /// See [`Message`] docs for info on possible updates
     pub fn update(&mut self, msg: Message) {
         match msg {
             Message::MoveCursor(dir) => self.move_cursor(dir),
@@ -105,7 +152,7 @@ impl ShellPrompt {
             Dir::Left => self.grapheme_idx.saturating_sub(1),
             Dir::Right => self.grapheme_idx.saturating_add(1),
         };
-        self.grapheme_idx = cursor_moved.clamp(0, self.graphemes().count() as u16);
+        self.grapheme_idx = cursor_moved.clamp(0, self.graphemes().count().try_into().unwrap());
     }
 
     /// insert `new_char` at the current `char_idx`
@@ -243,6 +290,7 @@ mod test {
 
     #[test]
     fn delete_unicode_grapheme() {
+        #![expect(clippy::unicode_not_nfc, reason = "we're testing cursed strings")]
         // latin small letter e + combining acute accent
         // 2 code points
         test_delete("é", 1, "");
@@ -255,18 +303,18 @@ mod test {
 
     #[test]
     fn correct_cursor_pos() {
-        assert_eq!(new_shell_prompt("abcd", 3).cursor_pos(), 3);
+        assert_eq!(new_shell_prompt("abcd", 3).cursor_offset(), 3);
         // The wide characters should be accounted for in the cursor pos
         assert_eq!(
-            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 3).cursor_pos(),
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 3).cursor_offset(),
             6
         );
         assert_eq!(
-            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 5).cursor_pos(),
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 5).cursor_offset(),
             10
         );
         assert_eq!(
-            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 8).cursor_pos(),
+            new_shell_prompt("Ｈｅｌｌｏ, ｗｏｒｌｄ!", 8).cursor_offset(),
             14
         );
     }

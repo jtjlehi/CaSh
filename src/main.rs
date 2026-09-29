@@ -1,3 +1,5 @@
+//! A TUI for capturing shell outputs and exploring them
+
 use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -12,7 +14,7 @@ use ratatui::{
 
 use crate::input_prompt::{Message as PromptMessage, ShellPrompt};
 
-mod input_prompt;
+pub mod input_prompt;
 
 /// The full state of the app
 #[derive(Default, Debug, PartialEq, PartialOrd)]
@@ -21,8 +23,10 @@ pub struct State {
     prompt_string: ShellPrompt,
 }
 
+/// The global mode of the ui
 #[derive(Default, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Mode {
+    /// The default/normal mode
     #[default]
     Normal,
     /// Currently typing in a command in the shell
@@ -51,7 +55,7 @@ impl AppLayout {
 /// The `view` logic
 impl State {
     /// How to render the app based on the state
-    pub fn view(&self, frame: &mut Frame) {
+    pub fn view(&self, frame: &mut Frame<'_>) {
         let layout = AppLayout::new(frame.area());
 
         // Draw the main content (for now it isn't a seperate thing)
@@ -80,16 +84,18 @@ impl State {
     }
 }
 
+/// Message or event passed to the [`State::update`] function
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub enum Message {
     /// Quit the application
     Quit,
     /// Transition to the given mode
     ToMode(Mode),
+    /// A message that is passed to the [`PromptShell`]
     PromptMessage(PromptMessage),
     /// Enter the command in the Prompt
     ///
-    /// Doing this will pass commands down to `PromptShell::update`
+    /// Doing this will pass commands down to [`PromptShell::update`]
     EnterCmd,
 }
 
@@ -98,6 +104,8 @@ impl State {
     /// Update the state based on the message passsed
     ///
     /// If the app is quitting, it returns `None`
+    ///
+    /// See the docs for [`Message`] for details on the updates
     pub fn update(mut self, msg: Message) -> Option<State> {
         match msg {
             Message::Quit => return None,
@@ -113,6 +121,7 @@ impl State {
     }
 }
 
+/// Handle the next global event by converting it into a message
 pub fn handle_event(state: &State) -> io::Result<Option<Message>> {
     match event::read()? {
         // it's important to check that the event is a key press event as
