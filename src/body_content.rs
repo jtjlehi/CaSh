@@ -22,8 +22,9 @@ use ratatui::{
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
 pub struct BodyContent {
     /// Shared pointer to the contents to display
-    content: Arc<str>,
-    title: String,
+    pub content: Arc<str>,
+    /// The title of the content
+    pub title: String,
 }
 
 impl Default for BodyContent {

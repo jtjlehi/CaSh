@@ -1,6 +1,6 @@
 //! A TUI for capturing shell outputs and exploring them
 
-use std::io;
+use std::{io, sync::Arc};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -22,6 +22,8 @@ pub struct State {
     prompt_string: ShellPrompt,
     /// The body content widget state
     body_content: BodyContent,
+    /// history of the commands
+    history: Vec<String>,
 }
 
 /// The global mode of the ui
@@ -116,11 +118,17 @@ impl State {
     /// - reset the prompt string
     /// - switch back to normal mode
     fn enter_cmd(&mut self) {
-        // TODO: actually enter the command
-        // - Get the command from `prompt_string`
-        // - run the command
-        // - Switch back to normal mode
+        let cmd = self.prompt_string.cmd();
+        // adds the cmd to the history of commands
+        self.history.push(cmd.to_string());
 
+        // TODO: actually run the command; for now we just show the history
+        self.body_content = BodyContent {
+            content: Arc::from(self.history.join("\n")),
+            title: "History".to_string(),
+        };
+
+        // reset the prompt and mode
         self.prompt_string.update(PromptMessage::Reset);
         self.mode = Mode::Normal;
     }
