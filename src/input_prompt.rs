@@ -1,12 +1,18 @@
 //! The [`ShellPrompt`] widget and logic
 //!
-//! Displaying and updating [`ShellPrompt`] are controlled through:
-//! - [`render`]: How to display the widget
-//! - [`update`]: How to update the widget based on the passed [`Message`]s
-//! - [`handle_key`]: What messages to create based on the keys pressed
+//! Displaying and updating [`ShellPrompt`] is controlled through:
+//! - [`render`]: Implements [`Widget`] to control viewing/displaying
+//! - [`update`]: Function to update the widget based on the passed [`Message`]s
+//! - [`handle_key`]: What messages to create based on the keys pressed.
 //!
-//! [`render`]: ShellPrompt::render
+//! [`render`]: Widget::render
 //! [`update`]: ShellPrompt::update
+//!
+//! It's also possible to get the current prompt string using the [`cmd`]
+//! function.
+//!
+//! [`cmd`]: ShellPrompt::cmd
+//!
 
 use crossterm::event::{self, KeyCode};
 use ratatui::{
@@ -205,6 +211,14 @@ impl ShellPrompt {
     fn reset(&mut self) {
         self.input.clear();
         self.grapheme_idx = 0;
+    }
+}
+
+/// Get Prompt logic
+impl ShellPrompt {
+    /// Get the current contents of the shell prompt
+    pub fn cmd(&self) -> &str {
+        &self.input
     }
 }
 
