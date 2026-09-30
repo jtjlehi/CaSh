@@ -105,13 +105,24 @@ impl State {
             Message::Quit => return None,
             Message::ToMode(mode) => self.mode = mode,
             Message::PromptMessage(msg) => self.prompt_string.update(msg),
-            Message::EnterCmd => {
-                // TODO: actually enter the command
-
-                self.prompt_string.update(PromptMessage::Reset);
-            }
+            Message::EnterCmd => self.enter_cmd(),
         }
         Some(self)
+    }
+
+    /// Enter/run the `prompt_string`
+    ///
+    /// - run the string as a command
+    /// - reset the prompt string
+    /// - switch back to normal mode
+    fn enter_cmd(&mut self) {
+        // TODO: actually enter the command
+        // - Get the command from `prompt_string`
+        // - run the command
+        // - Switch back to normal mode
+
+        self.prompt_string.update(PromptMessage::Reset);
+        self.mode = Mode::Normal;
     }
 }
 
