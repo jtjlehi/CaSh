@@ -12,6 +12,7 @@ use crate::body_content::BodyContent;
 use crate::input_prompt::{Message as PromptMessage, ShellPrompt};
 
 pub mod body_content;
+pub mod commands;
 pub mod input_prompt;
 
 /// The full state of the app
