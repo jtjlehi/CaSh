@@ -16,6 +16,7 @@
 //!
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::process::{Child, Command, ExitStatus, Stdio};
 
 use snafu::prelude::*;
@@ -25,6 +26,7 @@ mod cmd_id {
 
     /// A unique identifier for a given command
     #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+    #[must_use]
     pub struct CmdId(usize);
 
     impl CmdId {
@@ -114,14 +116,15 @@ impl Store {
     /// Add's the command to the store (without running it) and returns it's [`CmdId`]
     ///
     /// Returns an error if the cmd fails to parse
-    pub fn add_cmd(&mut self, cmd_str: &str) -> Result<CmdId, CmdParseError> {
+    pub fn add_cmd(&mut self, cmd_str: &str) -> Result<(CmdId, &Cmd), CmdParseError> {
+        let cmd = cmd_str.parse()?;
         let cmd_id = CmdId::next();
-        let insert_res = self.cmds.insert(cmd_id, cmd_str.parse()?);
-        assert!(
-            insert_res.is_none(),
-            "Failed to insert '{cmd_str}', store already contains cmd at {cmd_id:?}"
-        );
-        Ok(cmd_id)
+        match self.cmds.entry(cmd_id) {
+            Entry::Occupied(_) => {
+                panic!("Failed to insert '{cmd_str}', store already contains cmd at {cmd_id:?}");
+            }
+            Entry::Vacant(vacant_entry) => Ok((cmd_id, vacant_entry.insert(cmd))),
+        }
     }
 
     /// Checks if the given command has started running
@@ -130,19 +133,13 @@ impl Store {
         self.children.contains_key(&cmd_id)
     }
 
-    /// Try to run the given command, adding the [`Child`] to the store
+    /// Try to run the given command, adding the [`Child`] to the store if it starts
     ///
     /// If the command has already been run, it does nothing
     ///
     /// Returns an error if the command isn't found
-    pub fn run_cmd(&mut self, cmd_id: CmdId) -> Result<(), RunError> {
-        let cmd = self
-            .cmds
-            .get(&cmd_id)
-            .context(run_error::CmdNotFound { cmd_id })?;
-        if self.has_started(cmd_id) {
-            return Ok(());
-        }
+    pub fn run_cmd(&mut self, cmd_str: &str) -> Result<CmdId, CmdParseError> {
+        let (cmd_id, cmd) = self.add_cmd(cmd_str)?;
 
         match Command::new(&cmd.program)
             .args(cmd.args.split_whitespace())
@@ -160,7 +157,7 @@ impl Store {
             }
         }
 
-        Ok(())
+        Ok(cmd_id)
     }
 
     /// Wait for all [`ChildStatus::Running`] processes to finish
