@@ -1,6 +1,6 @@
 //! A TUI for capturing shell outputs and exploring them
 
-use std::{io, sync::Arc};
+use std::{error::Error, io};
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
@@ -9,6 +9,7 @@ use ratatui::{
 };
 
 use crate::body_content::BodyContent;
+use crate::commands::CmdId;
 use crate::input_prompt::{Message as PromptMessage, ShellPrompt};
 
 pub mod body_content;
@@ -16,15 +17,16 @@ pub mod commands;
 pub mod input_prompt;
 
 /// The full state of the app
-#[derive(Default, Debug, PartialEq, PartialOrd)]
+#[derive(Default, Debug)]
 pub struct State {
     mode: Mode,
     /// The shell prompt widget state
     prompt_string: ShellPrompt,
     /// The body content widget state
     body_content: BodyContent,
-    /// history of the commands
-    history: Vec<String>,
+    cmd_store: commands::Store,
+    current_cmd: Option<CmdId>,
+    errors: Vec<Box<dyn Error>>,
 }
 
 /// The global mode of the ui
@@ -105,7 +107,10 @@ impl State {
     /// See the docs for [`Message`] for details on the updates
     pub fn update(mut self, msg: Message) -> Option<State> {
         match msg {
-            Message::Quit => return None,
+            Message::Quit => {
+                self.cmd_store.wait_all();
+                return None;
+            }
             Message::ToMode(mode) => self.mode = mode,
             Message::PromptMessage(msg) => self.prompt_string.update(msg),
             Message::EnterCmd => self.enter_cmd(),
@@ -119,19 +124,29 @@ impl State {
     /// - reset the prompt string
     /// - switch back to normal mode
     fn enter_cmd(&mut self) {
-        let cmd = self.prompt_string.cmd();
-        // adds the cmd to the history of commands
-        self.history.push(cmd.to_string());
+        let cmd_id_res = self.cmd_store.run_cmd(self.prompt_string.cmd());
+        self.current_cmd = self.ok_or_handle(cmd_id_res);
 
         // TODO: actually run the command; for now we just show the history
         self.body_content = BodyContent {
-            content: Arc::from(self.history.join("\n")),
+            content: "command started".into(),
             title: "History".to_string(),
         };
 
         // reset the prompt and mode
         self.prompt_string.update(PromptMessage::Reset);
         self.mode = Mode::Normal;
+    }
+
+    /// if the result is ok, return Some(T), else add the error to the list and return None
+    fn ok_or_handle<T, E: Error + 'static>(&mut self, res: Result<T, E>) -> Option<T> {
+        match res {
+            Ok(ok) => Some(ok),
+            Err(err) => {
+                self.errors.push(Box::new(err));
+                None
+            }
+        }
     }
 }
 
@@ -197,7 +212,7 @@ mod tests {
 
     #[test]
     fn quit_message_quits() {
-        assert_eq!(State::default().update(Message::Quit), None);
+        assert!(State::default().update(Message::Quit).is_none());
     }
 
     #[test]
